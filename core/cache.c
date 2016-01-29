@@ -745,6 +745,29 @@ void uwsgi_cache_fix(struct uwsgi_cache *uc) {
 	}
 
 	uc->n_items = restored;
+
+	if (!uc->no_expire && !uc->purge_lru && !uc->lazy_expire) {
+
+		uint64_t now = (uint64_t)uwsgi_now();
+	
+		for (i = 1; i < uc->max_items; i++) {
+			struct uwsgi_cache_item *uci = cache_item(i);
+
+			// we reset next scan time first, then we find the least
+			// expiration time from those that are NOT expired yet.
+			if (i == 1)
+				uc->next_scan = 0;
+
+			if (uci->expires) {
+				if (uci->expires <= now) {
+					uwsgi_cache_del2(uc, NULL, 0, i, UWSGI_CACHE_FLAG_LOCAL);
+				} else if (!uc->next_scan || uc->next_scan > uci->expires) {
+					uc->next_scan = uci->expires;
+				}
+			}
+		}
+	}
+
 	uwsgi_log("[uwsgi-cache] restored %llu items\n", uc->n_items);
 }
 
